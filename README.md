@@ -16,19 +16,33 @@ Lightroom Classic export plug-in that splits one photo into Instagram carousel t
 
 If a newer `build` is listed, it downloads the release zip, installs into the plug-in folder, then asks you to **Reload Plug-in** in Plug-in Manager.
 
+## Free vs full licence
+
+| | Free | Full licence |
+|---|---|---|
+| Slides | 2–3 | 2–5 |
+| Ratios | 4:5 only | 3:4 + 4:5 |
+| Presets | Free set only | Full pack |
+| UI | Buy me a coffee + Buy full licence | No upsell buttons |
+
+- Free build: `License.forcePro = false` (default in source)
+- Paid zip: `./scripts/package-release.sh 1.0.1 paid` sets `forcePro = true`
+- Or unlock free install with key `ICE-PRO-UNLOCK` (temporary test key)
+
 ## Shipping a new version
 
 1. Bump `VERSION` in `InstagramCarouselExport.lrdevplugin/Info.lua` (increase `build`).
 2. Update `update/version.json` (`version`, `build`, `downloadUrl`, `notes`).
 3. Commit and push to `main`.
-4. Create the release zip (folder must contain `Info.lua`):
+4. Build zips:
 
 ```bash
-./scripts/package-release.sh 1.0.0
+./scripts/package-release.sh 1.0.1 free
+./scripts/package-release.sh 1.0.1 paid
 ```
 
-5. Create a GitHub Release tagged `v1.0.0` and upload `InstagramCarouselExport.lrplugin.zip`.
-6. Confirm `downloadUrl` in `update/version.json` matches that asset URL, then push if needed.
+5. Create a GitHub Release tagged `v1.0.1` and upload the zip(s).
+6. Point free users’ `downloadUrl` at the free asset.
 
 ## Repo layout
 

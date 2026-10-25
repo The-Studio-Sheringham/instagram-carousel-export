@@ -1,7 +1,7 @@
 {
-  "version": "1.0.0",
-  "build": 24,
+  "version": "1.0.1",
+  "build": 25,
   "channel": "stable",
-  "downloadUrl": "https://github.com/The-Studio-Sheringham/instagram-carousel-export/releases/download/v1.0.0/InstagramCarouselExport.lrplugin.zip",
-  "notes": "Adds Check for Updates with in-app install. Reload the plug-in after installing."
+  "downloadUrl": "https://github.com/The-Studio-Sheringham/instagram-carousel-export/releases/download/v1.0.1/InstagramCarouselExport-free.lrplugin.zip",
+  "notes": "Free vs full licence split: Free is 4:5 with 2–3 slides; full unlocks 3:4, 2–5 slides, and presets."
 }

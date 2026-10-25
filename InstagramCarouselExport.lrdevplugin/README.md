@@ -4,14 +4,24 @@ This Lightroom Classic export plugin splits each exported image into carousel-re
 
 ## Features
 
-- Variable columns: Free `2–3`, Pro `2–5`
-- Fixed rows: `1` (single-row carousel strip)
-- Tile ratios: `3:4` portrait or `4:5` portrait
-- Presets: `IG Carousel x2..x5` for both `3:4` and `4:5`
-- Crop mode: use existing Lightroom crop first, with center-crop fallback
+### Free
+- Slides: `2–3`
+- Ratio: `4:5` only
+- Presets for those free options
+- Buy me a coffee + Buy full licence + Enter licence key
+
+### Full licence
+- Slides: `2–5`
+- Ratios: `3:4` and `4:5`
+- Full preset pack
+- No upsell buttons
+
+Also:
+- Crop mode: existing Lightroom crop first, with center-crop fallback
 - Deterministic tile naming: `photo_c{cols}x1_r{row}_c{col}.jpg`
-- In-app **Check for updates** (downloads + installs, then reload in Plug-in Manager)
-- In-app support + links: website and email buttons in Export + Crop Ratio Helper
+- In-app **Check for updates** (install, then reload in Plug-in Manager)
+
+Test unlock key (until store keys are wired): `ICE-PRO-UNLOCK`
 
 ## Updates (GitHub)
 

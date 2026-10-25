@@ -8,25 +8,6 @@ local ExportDialogSections = {}
 local GARETH_URL = "https://garethgabriel.com"
 local STUDIO_URL = "https://thestudiosheringham.com"
 local SUPPORT_EMAIL_URL = "mailto:support@thestudiosheringham.com"
-local ASPECT_OPTIONS = {
-    { title = "3:4 portrait", value = "3:4" },
-    { title = "4:5 portrait", value = "4:5" },
-}
-
-local function columnOptions()
-    local options = {
-        { title = "2", value = 2 },
-        { title = "3", value = 3 },
-    }
-    if License.isPro() then
-        options[#options + 1] = { title = "4", value = 4 }
-        options[#options + 1] = { title = "5", value = 5 }
-    else
-        options[#options + 1] = { title = "4 (Pro)", value = 4 }
-        options[#options + 1] = { title = "5 (Pro)", value = 5 }
-    end
-    return options
-end
 
 local CROP_MODE_OPTIONS = {
     { title = "Use existing Lightroom crop first (fallback to center crop)", value = "existing_first" },
@@ -68,17 +49,19 @@ local function openExternal(url)
     end)
 end
 
-local PRESET_OPTIONS = {
-    { title = "Custom", value = "custom" },
-}
-
-for _, aspect in ipairs({ "3:4", "4:5" }) do
-    for columns = 2, 5 do
-        PRESET_OPTIONS[#PRESET_OPTIONS + 1] = {
-            title = ("IG Carousel x%d (%s)"):format(columns, aspect),
-            value = ("%d_%s"):format(columns, aspect:gsub(":", "x")),
-        }
+local function buildPresetOptions()
+    local options = {
+        { title = "Custom", value = "custom" },
+    }
+    for _, aspect in ipairs(License.presetAspects()) do
+        for columns = License.minColumns(), License.maxColumns() do
+            options[#options + 1] = {
+                title = ("IG Carousel x%d (%s)"):format(columns, aspect),
+                value = ("%d_%s"):format(columns, aspect:gsub(":", "x")),
+            }
+        end
     end
+    return options
 end
 
 local function parsePreset(presetValue)
@@ -87,7 +70,6 @@ local function parsePreset(presetValue)
     end
     local columns, aspectA, aspectB = presetValue:match("^(%d+)_(%d)x(%d)$")
     if not columns then
-        -- Backward compatibility with old saved presets.
         columns, aspectA, aspectB = presetValue:match("^(%d+)x3_(%d)x(%d)$")
     end
     if not columns then
@@ -98,7 +80,7 @@ end
 
 local function updateCropHelper(propertyTable)
     local columns = tonumber(propertyTable.carouselColumns) or 3
-    local ratio = propertyTable.carouselAspect or "4:5"
+    local ratio = propertyTable.carouselAspect or License.defaultAspect()
     propertyTable.carouselOverallCropRatioValue = overallRatioText(columns, ratio)
     propertyTable.carouselOverallCropDecimalValue = overallRatioDecimal(columns, ratio)
     propertyTable.carouselOverallCropDecimalText = ("Decimal: %.4f"):format(propertyTable.carouselOverallCropDecimalValue)
@@ -135,9 +117,9 @@ end
 
 local function syncPresetFromManualValues(propertyTable)
     local columns = tonumber(propertyTable.carouselColumns) or 3
-    local ratio = propertyTable.carouselAspect or "4:5"
+    local ratio = propertyTable.carouselAspect or License.defaultAspect()
     local expected = ("%d_%s"):format(columns, ratio:gsub(":", "x"))
-    for _, opt in ipairs(PRESET_OPTIONS) do
+    for _, opt in ipairs(buildPresetOptions()) do
         if opt.value == expected then
             propertyTable.carouselPreset = expected
             return
@@ -148,7 +130,7 @@ end
 
 local function summarize(propertyTable)
     local columns = tonumber(propertyTable.carouselColumns) or 3
-    local ratio = propertyTable.carouselAspect or "4:5"
+    local ratio = propertyTable.carouselAspect or License.defaultAspect()
     propertyTable.carouselSynopsis = ("%d carousel slides, %s portrait"):format(columns, ratio)
     updateCropHelper(propertyTable)
 end
@@ -165,13 +147,15 @@ local function validate(propertyTable)
     if columns > maxColumns then
         propertyTable.LR_canExport = false
         propertyTable.carouselValidationError =
-            ("Free version supports up to %d slides. Upgrade to Pro for 4–5."):format(maxColumns)
+            ("Free version supports up to %d slides. Buy a full licence for 4–5 slides + 3:4.")
+            :format(maxColumns)
         return false
     end
 
-    if propertyTable.carouselAspect ~= "3:4" and propertyTable.carouselAspect ~= "4:5" then
+    if not License.isAspectAllowed(propertyTable.carouselAspect) then
         propertyTable.LR_canExport = false
-        propertyTable.carouselValidationError = "Aspect ratio must be 3:4 or 4:5."
+        propertyTable.carouselValidationError =
+            "Free version supports 4:5 only. Buy a full licence to unlock 3:4."
         return false
     end
 
@@ -201,18 +185,15 @@ local function validate(propertyTable)
 end
 
 local function enforceLicenseLimits(propertyTable)
-    local maxColumns = License.maxColumns()
-    local columns = tonumber(propertyTable.carouselColumns) or 3
-    if columns > maxColumns then
-        propertyTable.carouselColumns = maxColumns
-    end
+    propertyTable.carouselColumns = License.clampColumns(propertyTable.carouselColumns)
+    propertyTable.carouselAspect = License.clampAspect(propertyTable.carouselAspect)
     propertyTable.carouselLicenseStatus = License.statusText()
 end
 
 function ExportDialogSections.startDialog(propertyTable)
     propertyTable.carouselPreset = propertyTable.carouselPreset or "custom"
     propertyTable.carouselColumns = tonumber(propertyTable.carouselColumns) or 3
-    propertyTable.carouselAspect = propertyTable.carouselAspect or "4:5"
+    propertyTable.carouselAspect = propertyTable.carouselAspect or License.defaultAspect()
     propertyTable.carouselCropMode = propertyTable.carouselCropMode or "existing_first"
     propertyTable.carouselTileWidthPx = tonumber(propertyTable.carouselTileWidthPx) or 1080
     propertyTable.carouselJpegQuality = tonumber(propertyTable.carouselJpegQuality) or 92
@@ -231,6 +212,7 @@ function ExportDialogSections.startDialog(propertyTable)
             propertyTable.carouselColumns = columns
             propertyTable.carouselAspect = aspect
         end
+        enforceLicenseLimits(propertyTable)
         summarize(propertyTable)
         validate(propertyTable)
     end)
@@ -242,6 +224,7 @@ function ExportDialogSections.startDialog(propertyTable)
         validate(propertyTable)
     end)
     propertyTable:addObserver("carouselAspect", function()
+        enforceLicenseLimits(propertyTable)
         syncPresetFromManualValues(propertyTable)
         summarize(propertyTable)
         validate(propertyTable)
@@ -258,16 +241,19 @@ function ExportDialogSections.startDialog(propertyTable)
 
     propertyTable:addObserver("LR_carouselColumns", function()
         syncFromPrefixedFields(propertyTable)
+        enforceLicenseLimits(propertyTable)
         summarize(propertyTable)
         validate(propertyTable)
     end)
     propertyTable:addObserver("LR_carouselAspect", function()
         syncFromPrefixedFields(propertyTable)
+        enforceLicenseLimits(propertyTable)
         summarize(propertyTable)
         validate(propertyTable)
     end)
     propertyTable:addObserver("LR_carouselPreset", function()
         syncFromPrefixedFields(propertyTable)
+        enforceLicenseLimits(propertyTable)
         summarize(propertyTable)
         validate(propertyTable)
     end)
@@ -300,160 +286,193 @@ end
 
 function ExportDialogSections.sectionsForTopOfDialog(f, propertyTable)
     local bind = LrView.bind
+    local isPro = License.isPro()
+
+    local column = {
+        spacing = f:control_spacing(),
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text {
+                title = "Preset",
+                width = 150,
+                alignment = "right",
+            },
+            f:popup_menu {
+                value = bind("carouselPreset"),
+                items = buildPresetOptions(),
+            },
+        },
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text {
+                title = "Carousel slides",
+                width = 150,
+                alignment = "right",
+            },
+            f:popup_menu {
+                value = bind("carouselColumns"),
+                items = License.columnOptions(""),
+                width_in_chars = 8,
+            },
+        },
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text {
+                title = "Post ratio",
+                width = 150,
+                alignment = "right",
+            },
+            f:popup_menu {
+                value = bind("carouselAspect"),
+                items = License.aspectOptions(),
+            },
+        },
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text {
+                title = "Crop source mode",
+                width = 150,
+                alignment = "right",
+            },
+            f:popup_menu {
+                value = bind("carouselCropMode"),
+                items = CROP_MODE_OPTIONS,
+                width_in_chars = 42,
+            },
+        },
+
+        f:static_text {
+            title = bind("carouselOverallCropRatio"),
+            fill_horizontal = 1,
+        },
+        f:static_text {
+            title = bind("carouselOverallCropDecimalText"),
+            fill_horizontal = 1,
+        },
+        f:static_text {
+            title = "Tip: Use Plug-in Extras > Instagram Carousel Crop Ratio Helper for copy actions.",
+            fill_horizontal = 1,
+        },
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text {
+                title = "Tile width (px)",
+                width = 150,
+                alignment = "right",
+            },
+            f:edit_field {
+                value = bind("carouselTileWidthPx"),
+                width_in_chars = 8,
+            },
+        },
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text {
+                title = "JPEG quality",
+                width = 150,
+                alignment = "right",
+            },
+            f:edit_field {
+                value = bind("carouselJpegQuality"),
+                width_in_chars = 8,
+            },
+        },
+
+        f:checkbox {
+            title = "Create per-photo subfolder for tiles",
+            value = bind("carouselCreateSubfolder"),
+        },
+        f:checkbox {
+            title = "Reverse slide order (for posting)",
+            value = bind("carouselReverseColumns"),
+        },
+
+        f:static_text {
+            title = bind("carouselValidationError"),
+            fill_horizontal = 1,
+        },
+        f:static_text {
+            title = isPro
+                and "Tip: Open Crop Ratio Helper, then click Create Export Presets for the full preset pack."
+                or "Tip: Free presets cover 4:5 with 2–3 slides. Full licence unlocks 3:4 and 4–5 slides.",
+            fill_horizontal = 1,
+        },
+        f:static_text {
+            title = bind("carouselLicenseStatus"),
+            fill_horizontal = 1,
+        },
+        f:static_text {
+            title = "Support: support@thestudiosheringham.com",
+            fill_horizontal = 1,
+        },
+    }
+
+    if not isPro then
+        column[#column + 1] = f:row {
+            spacing = f:control_spacing(),
+            f:push_button {
+                title = "Buy me a coffee",
+                action = function()
+                    License.openBuyMeACoffee()
+                end,
+            },
+            f:push_button {
+                title = "Buy full licence",
+                action = function()
+                    License.openBuyLicence()
+                end,
+            },
+            f:push_button {
+                title = "Enter licence key",
+                action = function()
+                    License.promptActivate()
+                    enforceLicenseLimits(propertyTable)
+                    summarize(propertyTable)
+                    validate(propertyTable)
+                end,
+            },
+        }
+    end
+
+    column[#column + 1] = f:row {
+        spacing = f:control_spacing(),
+        f:push_button {
+            title = "Check for updates",
+            action = function()
+                UpdateService.runCheckFromUi()
+            end,
+        },
+        f:push_button {
+            title = "Gareth website",
+            action = function()
+                openExternal(GARETH_URL)
+            end,
+        },
+        f:push_button {
+            title = "Studio website",
+            action = function()
+                openExternal(STUDIO_URL)
+            end,
+        },
+        f:push_button {
+            title = "Email support",
+            action = function()
+                openExternal(SUPPORT_EMAIL_URL)
+            end,
+        },
+    }
 
     return {
         {
             title = "Instagram Carousel",
             synopsis = bind("carouselSynopsis"),
-            f:column {
-                spacing = f:control_spacing(),
-
-                f:row {
-                    spacing = f:label_spacing(),
-                    f:static_text {
-                        title = "Preset",
-                        width = 150,
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = bind("carouselPreset"),
-                        items = PRESET_OPTIONS,
-                    },
-                },
-
-                f:row {
-                    spacing = f:label_spacing(),
-                    f:static_text {
-                        title = "Carousel slides",
-                        width = 150,
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = bind("carouselColumns"),
-                        items = columnOptions(),
-                        width_in_chars = 8,
-                    },
-                },
-
-                f:row {
-                    spacing = f:label_spacing(),
-                    f:static_text {
-                        title = "Post ratio",
-                        width = 150,
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = bind("carouselAspect"),
-                        items = ASPECT_OPTIONS,
-                    },
-                },
-
-                f:row {
-                    spacing = f:label_spacing(),
-                    f:static_text {
-                        title = "Crop source mode",
-                        width = 150,
-                        alignment = "right",
-                    },
-                    f:popup_menu {
-                        value = bind("carouselCropMode"),
-                        items = CROP_MODE_OPTIONS,
-                        width_in_chars = 42,
-                    },
-                },
-
-                f:static_text {
-                    title = bind("carouselOverallCropRatio"),
-                    fill_horizontal = 1,
-                },
-                f:static_text {
-                    title = bind("carouselOverallCropDecimalText"),
-                    fill_horizontal = 1,
-                },
-                f:static_text {
-                    title = "Tip: Use Plug-in Extras > Instagram Carousel Crop Ratio Helper for copy actions.",
-                    fill_horizontal = 1,
-                },
-
-                f:row {
-                    spacing = f:label_spacing(),
-                    f:static_text {
-                        title = "Tile width (px)",
-                        width = 150,
-                        alignment = "right",
-                    },
-                    f:edit_field {
-                        value = bind("carouselTileWidthPx"),
-                        width_in_chars = 8,
-                    },
-                },
-
-                f:row {
-                    spacing = f:label_spacing(),
-                    f:static_text {
-                        title = "JPEG quality",
-                        width = 150,
-                        alignment = "right",
-                    },
-                    f:edit_field {
-                        value = bind("carouselJpegQuality"),
-                        width_in_chars = 8,
-                    },
-                },
-
-                f:checkbox {
-                    title = "Create per-photo subfolder for tiles",
-                    value = bind("carouselCreateSubfolder"),
-                },
-                f:checkbox {
-                    title = "Reverse slide order (for posting)",
-                    value = bind("carouselReverseColumns"),
-                },
-
-                f:static_text {
-                    title = bind("carouselValidationError"),
-                    fill_horizontal = 1,
-                },
-                f:static_text {
-                    title = "Tip: Open Crop Ratio Helper, then click Create Export Presets to auto-add left-panel presets.",
-                    fill_horizontal = 1,
-                },
-                f:static_text {
-                    title = bind("carouselLicenseStatus"),
-                    fill_horizontal = 1,
-                },
-                f:static_text {
-                    title = "Support: support@thestudiosheringham.com",
-                    fill_horizontal = 1,
-                },
-                f:row {
-                    spacing = f:control_spacing(),
-                    f:push_button {
-                        title = "Check for updates",
-                        action = function()
-                            UpdateService.runCheckFromUi()
-                        end,
-                    },
-                    f:push_button {
-                        title = "Gareth website",
-                        action = function()
-                            openExternal(GARETH_URL)
-                        end,
-                    },
-                    f:push_button {
-                        title = "Studio website",
-                        action = function()
-                            openExternal(STUDIO_URL)
-                        end,
-                    },
-                    f:push_button {
-                        title = "Email support",
-                        action = function()
-                            openExternal(SUPPORT_EMAIL_URL)
-                        end,
-                    },
-                },
-            },
+            f:column(column),
         },
     }
 end

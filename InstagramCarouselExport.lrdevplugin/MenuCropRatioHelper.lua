@@ -171,9 +171,8 @@ local function createCarouselPresets()
     end
 
     local written = 0
-    local maxColumns = License.maxColumns()
-    for _, aspect in ipairs({ "3:4", "4:5" }) do
-        for columns = 2, maxColumns do
+    for _, aspect in ipairs(License.presetAspects()) do
+        for columns = License.minColumns(), License.maxColumns() do
             local name = presetName(columns, aspect)
             local path = LrPathUtils.child(folder, name .. ".lrtemplate")
             local content = buildTemplateText(name, columns, aspect)
@@ -187,39 +186,19 @@ local function createCarouselPresets()
         end
     end
 
-    return true, ("Created/updated %d presets in:\n%s\n\nRe-open Export dialog if left list does not refresh immediately.")
-        :format(written, folder)
-end
+    local scopeNote = License.isPro()
+        and "\n\nFull licence presets: 3:4 + 4:5, slides 2–5."
+        or "\n\nFree presets: 4:5 only, slides 2–3. Buy a full licence for 3:4 and 4–5 slides."
 
-local function columnOptions()
-    local options = {
-        { title = "2 slides", value = 2 },
-        { title = "3 slides", value = 3 },
-    }
-    if License.isPro() then
-        options[#options + 1] = { title = "4 slides", value = 4 }
-        options[#options + 1] = { title = "5 slides", value = 5 }
-    else
-        options[#options + 1] = { title = "4 slides (Pro)", value = 4 }
-        options[#options + 1] = { title = "5 slides (Pro)", value = 5 }
-    end
-    return options
+    return true, ("Created/updated %d presets in:\n%s\n\nRe-open Export dialog if left list does not refresh immediately.%s")
+        :format(written, folder, scopeNote)
 end
-
-local ASPECT_OPTIONS = {
-    { title = "3:4 portrait", value = "3:4" },
-    { title = "4:5 portrait", value = "4:5" },
-}
 
 local function updateState(props)
-    local columns = tonumber(props.columns) or 2
-    local maxColumns = License.maxColumns()
-    if columns > maxColumns then
-        columns = maxColumns
-        props.columns = maxColumns
-        props.copyStatus = ("Free version supports up to %d slides. Upgrade to Pro for 4–5."):format(maxColumns)
-    end
-    local aspect = props.aspect or "3:4"
+    props.columns = License.clampColumns(props.columns)
+    props.aspect = License.clampAspect(props.aspect)
+    local columns = props.columns
+    local aspect = props.aspect
     local ratioText, decimalValue = computeRatio(columns, aspect)
     props.ratioText = ratioText
     props.decimalText = ("%.4f"):format(decimalValue)
@@ -239,8 +218,9 @@ LrFunctionContext.callWithContext("InstagramCarouselCropRatioHelper", function(c
     local bind = LrView.bind
     local props = LrBinding.makePropertyTable(context)
 
-    props.columns = 2
-    props.aspect = "3:4"
+    local isPro = License.isPro()
+    props.columns = License.clampColumns(2)
+    props.aspect = License.defaultAspect()
     props.copyStatus = ""
     updateState(props)
 
@@ -251,121 +231,156 @@ LrFunctionContext.callWithContext("InstagramCarouselCropRatioHelper", function(c
         updateState(props)
     end)
 
-    LrDialogs.presentModalDialog({
-        title = "Instagram Carousel Crop Ratio Helper",
-        contents = f:column {
-            bind_to_object = props,
-            spacing = f:control_spacing(),
+    local contents = {
+        bind_to_object = props,
+        spacing = f:control_spacing(),
 
-            f:row {
-                spacing = f:label_spacing(),
-                f:static_text { title = "Carousel slides", width = 120, alignment = "right" },
-                f:popup_menu { value = bind("columns"), items = columnOptions(), width_in_chars = 14 },
-            },
-
-            f:row {
-                spacing = f:label_spacing(),
-                f:static_text { title = "Post ratio", width = 120, alignment = "right" },
-                f:popup_menu { value = bind("aspect"), items = ASPECT_OPTIONS },
-            },
-
-            f:static_text { title = bind("summary"), fill_horizontal = 1 },
-            f:static_text {
-                title = bind("ratioHeadline"),
-                fill_horizontal = 1,
-                font = "<system/bold>",
-            },
-            f:static_text {
-                title = bind("decimalHeadline"),
-                fill_horizontal = 1,
-            },
-            f:row {
-                spacing = f:label_spacing(),
-                f:static_text { title = "Ratio", width = 120, alignment = "right" },
-                f:static_text { title = bind("ratioText"), width_in_chars = 12 },
-                f:static_text { title = "Decimal", width = 70, alignment = "right" },
-                f:static_text { title = bind("decimalText"), width_in_chars = 10 },
-            },
-
-            f:row {
-                spacing = f:control_spacing(),
-                f:push_button {
-                    title = "Copy Ratio",
-                    action = function()
-                        if copyToClipboard(props.ratioText) then
-                            props.copyStatus = ("Copied ratio %s"):format(props.ratioText)
-                        else
-                            props.copyStatus = "Could not copy ratio."
-                        end
-                    end,
-                },
-                f:push_button {
-                    title = "Copy Decimal",
-                    action = function()
-                        if copyToClipboard(props.decimalText) then
-                            props.copyStatus = ("Copied decimal %s"):format(props.decimalText)
-                        else
-                            props.copyStatus = "Could not copy decimal."
-                        end
-                    end,
-                },
-                f:static_text { title = bind("copyStatus"), fill_horizontal = 1 },
-            },
-            f:row {
-                spacing = f:control_spacing(),
-                f:push_button {
-                    title = "Create Export Presets",
-                    action = function()
-                        local ok, message = createCarouselPresets()
-                        if ok then
-                            LrDialogs.message("Create Carousel Export Presets", message, "info")
-                        else
-                            LrDialogs.message("Create Carousel Export Presets", message, "critical")
-                        end
-                    end,
-                },
-                f:push_button {
-                    title = "Check for updates",
-                    action = function()
-                        UpdateService.runCheckFromUi()
-                    end,
-                },
-            },
-            f:separator { fill_horizontal = 1 },
-            f:static_text {
-                title = "How to use:\n1) Choose Carousel slides + Post ratio here.\n2) Copy the suggested ratio and set it in Develop Crop.\n3) In Export, use the same slides and post ratio settings.",
-                fill_horizontal = 1,
-            },
-            f:static_text {
-                title = bind("licenseStatus"),
-                fill_horizontal = 1,
-            },
-            f:static_text {
-                title = "Support: support@thestudiosheringham.com",
-                fill_horizontal = 1,
-            },
-            f:row {
-                spacing = f:control_spacing(),
-                f:push_button {
-                    title = "Gareth website",
-                    action = function()
-                        openExternal(GARETH_URL)
-                    end,
-                },
-                f:push_button {
-                    title = "Studio website",
-                    action = function()
-                        openExternal(STUDIO_URL)
-                    end,
-                },
-                f:push_button {
-                    title = "Email support",
-                    action = function()
-                        openExternal(SUPPORT_EMAIL_URL)
-                    end,
-                },
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text { title = "Carousel slides", width = 120, alignment = "right" },
+            f:popup_menu {
+                value = bind("columns"),
+                items = License.columnOptions(" slides"),
+                width_in_chars = 14,
             },
         },
+
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text { title = "Post ratio", width = 120, alignment = "right" },
+            f:popup_menu {
+                value = bind("aspect"),
+                items = License.aspectOptions(),
+            },
+        },
+
+        f:static_text { title = bind("summary"), fill_horizontal = 1 },
+        f:static_text {
+            title = bind("ratioHeadline"),
+            fill_horizontal = 1,
+            font = "<system/bold>",
+        },
+        f:static_text {
+            title = bind("decimalHeadline"),
+            fill_horizontal = 1,
+        },
+        f:row {
+            spacing = f:label_spacing(),
+            f:static_text { title = "Ratio", width = 120, alignment = "right" },
+            f:static_text { title = bind("ratioText"), width_in_chars = 12 },
+            f:static_text { title = "Decimal", width = 70, alignment = "right" },
+            f:static_text { title = bind("decimalText"), width_in_chars = 10 },
+        },
+
+        f:row {
+            spacing = f:control_spacing(),
+            f:push_button {
+                title = "Copy Ratio",
+                action = function()
+                    if copyToClipboard(props.ratioText) then
+                        props.copyStatus = ("Copied ratio %s"):format(props.ratioText)
+                    else
+                        props.copyStatus = "Could not copy ratio."
+                    end
+                end,
+            },
+            f:push_button {
+                title = "Copy Decimal",
+                action = function()
+                    if copyToClipboard(props.decimalText) then
+                        props.copyStatus = ("Copied decimal %s"):format(props.decimalText)
+                    else
+                        props.copyStatus = "Could not copy decimal."
+                    end
+                end,
+            },
+            f:static_text { title = bind("copyStatus"), fill_horizontal = 1 },
+        },
+        f:row {
+            spacing = f:control_spacing(),
+            f:push_button {
+                title = "Create Export Presets",
+                action = function()
+                    local ok, message = createCarouselPresets()
+                    if ok then
+                        LrDialogs.message("Create Carousel Export Presets", message, "info")
+                    else
+                        LrDialogs.message("Create Carousel Export Presets", message, "critical")
+                    end
+                end,
+            },
+            f:push_button {
+                title = "Check for updates",
+                action = function()
+                    UpdateService.runCheckFromUi()
+                end,
+            },
+        },
+    }
+
+    if not isPro then
+        contents[#contents + 1] = f:row {
+            spacing = f:control_spacing(),
+            f:push_button {
+                title = "Buy me a coffee",
+                action = function()
+                    License.openBuyMeACoffee()
+                end,
+            },
+            f:push_button {
+                title = "Buy full licence",
+                action = function()
+                    License.openBuyLicence()
+                end,
+            },
+            f:push_button {
+                title = "Enter licence key",
+                action = function()
+                    License.promptActivate()
+                    updateState(props)
+                end,
+            },
+        }
+    end
+
+    contents[#contents + 1] = f:separator { fill_horizontal = 1 }
+    contents[#contents + 1] = f:static_text {
+        title = "How to use:\n1) Choose Carousel slides + Post ratio here.\n2) Copy the suggested ratio and set it in Develop Crop.\n3) In Export, use the same slides and post ratio settings.",
+        fill_horizontal = 1,
+    }
+    contents[#contents + 1] = f:static_text {
+        title = bind("licenseStatus"),
+        fill_horizontal = 1,
+    }
+    contents[#contents + 1] = f:static_text {
+        title = "Support: support@thestudiosheringham.com",
+        fill_horizontal = 1,
+    }
+    contents[#contents + 1] = f:row {
+        spacing = f:control_spacing(),
+        f:push_button {
+            title = "Gareth website",
+            action = function()
+                openExternal(GARETH_URL)
+            end,
+        },
+        f:push_button {
+            title = "Studio website",
+            action = function()
+                openExternal(STUDIO_URL)
+            end,
+        },
+        f:push_button {
+            title = "Email support",
+            action = function()
+                openExternal(SUPPORT_EMAIL_URL)
+            end,
+        },
+    }
+
+    LrDialogs.presentModalDialog({
+        title = "Instagram Carousel Crop Ratio Helper",
+        contents = f:column(contents),
         actionVerb = "Close",
     })
 end)

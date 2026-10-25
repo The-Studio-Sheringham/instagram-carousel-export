@@ -55,21 +55,21 @@ function ExportServiceProvider.processRenderedPhotos(functionContext, exportCont
             if not imageSize then
                 logger:error(("Could not get dimensions for %s: %s"):format(sourcePath, sizeErr or "unknown error"))
             else
-                local requestedColumns = tonumber(getProp("carouselColumns")) or 3
-                local maxColumns = License.maxColumns()
-                if requestedColumns > maxColumns then
+                local requestedColumns = License.clampColumns(getProp("carouselColumns"))
+                local aspectKey = License.clampAspect(getProp("carouselAspect"))
+                if tonumber(getProp("carouselColumns")) ~= requestedColumns
+                    or tostring(getProp("carouselAspect") or "") ~= aspectKey then
                     logger:error(
-                        ("Blocked %d-slide export on Free (max %d). Upgrade to Pro.")
-                            :format(requestedColumns, maxColumns)
+                        ("Clamped export to Free limits: %d slides, %s. Buy a full licence for 3:4 and 4–5 slides.")
+                            :format(requestedColumns, aspectKey)
                     )
-                    requestedColumns = maxColumns
                 end
 
                 local layout, layoutErr = TileMath.computeLayout(
                     imageSize.width,
                     imageSize.height,
                     requestedColumns,
-                    getProp("carouselAspect"),
+                    aspectKey,
                     {
                         useExistingCropFirst = getProp("carouselCropMode") == "existing_first",
                     }
@@ -85,7 +85,7 @@ function ExportServiceProvider.processRenderedPhotos(functionContext, exportCont
                         layout = layout,
                         columns = requestedColumns,
                         rows = layout.rows,
-                        aspectKey = getProp("carouselAspect"),
+                        aspectKey = aspectKey,
                         tileWidthPx = tonumber(getProp("carouselTileWidthPx")),
                         jpegQuality = tonumber(getProp("carouselJpegQuality")),
                         createSubfolder = getProp("carouselCreateSubfolder"),
