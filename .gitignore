@@ -1,0 +1,8 @@
+.DS_Store
+.venv/
+tmp/
+output/
+dist/
+diag.txt
+*.zip
+*.lrplugin.zip
