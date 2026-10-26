@@ -28,5 +28,5 @@ return {
             file = "MenuCheckForUpdates.lua",
         },
     },
-    VERSION = { major = 1, minor = 0, revision = 1, build = 25 },
+    VERSION = { major = 1, minor = 0, revision = 2, build = 26 },
 }

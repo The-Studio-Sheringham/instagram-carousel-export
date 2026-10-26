@@ -19,8 +19,10 @@
 
 local LrBinding = import "LrBinding"
 local LrDialogs = import "LrDialogs"
+local LrFileUtils = import "LrFileUtils"
 local LrFunctionContext = import "LrFunctionContext"
 local LrHttp = import "LrHttp"
+local LrPathUtils = import "LrPathUtils"
 local LrPrefs = import "LrPrefs"
 local LrView = import "LrView"
 
@@ -158,9 +160,43 @@ function License.clearLicense()
     License.setLicenseKey("", false)
 end
 
+local function versionFromInfoLua()
+    local root = _PLUGIN and _PLUGIN.path
+    if not root then
+        return nil
+    end
+    local infoPath = LrPathUtils.child(root, "Info.lua")
+    if LrFileUtils.exists(infoPath) ~= "file" then
+        return nil
+    end
+    local body = LrFileUtils.readFile(infoPath) or ""
+    local block = body:match("VERSION%s*=%s*{([^}]+)}")
+    if not block then
+        return nil
+    end
+    return {
+        major = tonumber(block:match("major%s*=%s*(%d+)")) or 0,
+        minor = tonumber(block:match("minor%s*=%s*(%d+)")) or 0,
+        revision = tonumber(block:match("revision%s*=%s*(%d+)")) or 0,
+        build = tonumber(block:match("build%s*=%s*(%d+)")) or 0,
+    }
+end
+
+function License.currentVersionLabel()
+    local v = versionFromInfoLua() or (_PLUGIN and _PLUGIN.version) or {}
+    if type(v) ~= "table" then
+        v = {}
+    end
+    return ("%d.%d.%d.%d"):format(
+        tonumber(v.major) or 1,
+        tonumber(v.minor) or 0,
+        tonumber(v.revision) or 0,
+        tonumber(v.build) or 0
+    )
+end
+
 function License.statusText()
-    local v = (_PLUGIN and _PLUGIN.version) or {}
-    local version = ("%d.%d.%d.%d"):format(v.major or 1, v.minor or 0, v.revision or 0, v.build or 0)
+    local version = License.currentVersionLabel()
     if License.isPro() then
         if License.forcePro then
             return ("Full licence · %s"):format(version)

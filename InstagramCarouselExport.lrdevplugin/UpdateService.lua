@@ -109,8 +109,50 @@ local function parseManifest(body)
     }
 end
 
+local function parseVersionFromInfoLua()
+    local root = _PLUGIN and _PLUGIN.path
+    if not root then
+        return nil
+    end
+    local infoPath = LrPathUtils.child(root, "Info.lua")
+    if LrFileUtils.exists(infoPath) ~= "file" then
+        return nil
+    end
+    local body = LrFileUtils.readFile(infoPath) or ""
+    local block = body:match("VERSION%s*=%s*{([^}]+)}")
+    if not block then
+        return nil
+    end
+    return {
+        major = tonumber(block:match("major%s*=%s*(%d+)")) or 0,
+        minor = tonumber(block:match("minor%s*=%s*(%d+)")) or 0,
+        revision = tonumber(block:match("revision%s*=%s*(%d+)")) or 0,
+        build = tonumber(block:match("build%s*=%s*(%d+)")) or 0,
+    }
+end
+
 local function currentVersion()
+    -- Lightroom does not always expose _PLUGIN.version to Lua scripts (shows as 0.0.0.0).
+    -- Prefer reading VERSION from Info.lua next to the running plug-in.
+    local fromInfo = parseVersionFromInfoLua()
+    if fromInfo and (fromInfo.build > 0 or fromInfo.major > 0) then
+        return fromInfo
+    end
+
     local v = (_PLUGIN and _PLUGIN.version) or {}
+    if type(v) == "string" then
+        local major, minor, revision, build = v:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+        if not major then
+            major, minor, revision = v:match("^(%d+)%.(%d+)%.(%d+)$")
+        end
+        return {
+            major = tonumber(major) or 0,
+            minor = tonumber(minor) or 0,
+            revision = tonumber(revision) or 0,
+            build = tonumber(build) or 0,
+        }
+    end
+
     return {
         major = tonumber(v.major) or 0,
         minor = tonumber(v.minor) or 0,
